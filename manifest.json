@@ -1,0 +1,19 @@
+{
+  "name": "Remove spacing",
+  "id": "1532269337392556317",
+  "api": "1.0.0",
+  "main": "code.js",
+  "capabilities": [],
+  "permissions": ["teamlibrary"],
+  "enableProposedApi": false,
+  "documentAccess": "dynamic-page",
+  "editorType": [
+    "figma"
+  ],
+  "ui": "ui.html",
+  "networkAccess": {
+    "allowedDomains": [
+      "none"
+    ]
+  }
+}

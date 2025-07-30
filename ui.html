@@ -1,0 +1,424 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <style>
+    body {
+      font-family: Inter, sans-serif;
+      margin: 0;
+      padding: 20px;
+      background: var(--figma-color-bg);
+      color: var(--figma-color-text);
+    }
+
+    .container {
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }
+
+    h2 {
+      margin: 0 0 16px 0;
+      font-size: 16px;
+      font-weight: 600;
+      color: var(--figma-color-text);
+    }
+
+    .button {
+      background: var(--figma-color-bg-brand);
+      color: var(--figma-color-text-onbrand);
+      border: none;
+      border-radius: 6px;
+      padding: 8px 16px;
+      font-size: 14px;
+      font-weight: 500;
+      cursor: pointer;
+      transition: background 0.2s ease;
+    }
+
+    .button:hover {
+      background: var(--figma-color-bg-brand-hover);
+    }
+
+    .button:disabled {
+      background: var(--figma-color-bg-disabled);
+      color: var(--figma-color-text-disabled);
+      cursor: not-allowed;
+    }
+
+    .button.secondary {
+      background: var(--figma-color-bg-secondary);
+      color: var(--figma-color-text);
+    }
+
+    .button.secondary:hover {
+      background: var(--figma-color-bg-secondary-hover);
+    }
+
+    .button.danger {
+      background: var(--figma-color-bg-danger);
+      color: var(--figma-color-text-ondanger);
+    }
+
+    .button.danger:hover {
+      background: var(--figma-color-bg-danger-hover);
+    }
+
+    .message {
+      padding: 12px;
+      border-radius: 6px;
+      font-size: 14px;
+      line-height: 1.4;
+    }
+
+    .message.success {
+      background: var(--figma-color-bg-success);
+      color: var(--figma-color-text-onsuccess);
+      border: 1px solid var(--figma-color-border-success);
+    }
+
+    .message.error {
+      background: var(--figma-color-bg-danger);
+      color: var(--figma-color-text-ondanger);
+      border: 1px solid var(--figma-color-border-danger);
+    }
+
+    .message.info {
+      background: var(--figma-color-bg-secondary);
+      color: var(--figma-color-text);
+      border: 1px solid var(--figma-color-border);
+    }
+
+    .results {
+      background: var(--figma-color-bg-secondary);
+      border: 1px solid var(--figma-color-border);
+      border-radius: 6px;
+      padding: 16px;
+    }
+
+    .results h3 {
+      margin: 0 0 8px 0;
+      font-size: 14px;
+      font-weight: 600;
+    }
+
+    .results p {
+      margin: 0;
+      font-size: 14px;
+      color: var(--figma-color-text-secondary);
+    }
+
+    .button-group {
+      display: flex;
+      gap: 8px;
+    }
+
+    .hidden {
+      display: none;
+    }
+
+    .collection-list {
+      max-height: 200px;
+      overflow-y: auto;
+      border: 1px solid var(--figma-color-border);
+      border-radius: 6px;
+      background: var(--figma-color-bg);
+    }
+
+    .collection-item {
+      padding: 12px;
+      border-bottom: 1px solid var(--figma-color-border);
+      cursor: pointer;
+      transition: background 0.2s ease;
+    }
+
+    .collection-item:hover {
+      background: var(--figma-color-bg-secondary);
+    }
+
+    .collection-item:last-child {
+      border-bottom: none;
+    }
+
+    .collection-item.selected {
+      background: var(--figma-color-bg-brand);
+      color: var(--figma-color-text-onbrand);
+    }
+
+    .collection-name {
+      font-weight: 500;
+      font-size: 14px;
+    }
+
+    .collection-key {
+      font-size: 12px;
+      color: var(--figma-color-text-secondary);
+      margin-top: 4px;
+    }
+
+    .collection-item.selected .collection-key {
+      color: var(--figma-color-text-onbrand-secondary);
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h2>Spacing Variable Migration</h2>
+    
+    <div id="initial-state">
+      <p>First, select a library collection that contains your size variables, then search for spacing variables in your selection.</p>
+      <button id="load-collections-btn" class="button">Load Library Collections</button>
+    </div>
+
+    <div id="collections-state" class="hidden">
+      <h3>Select a Library Collection</h3>
+      <p>Choose the collection that contains your size variables:</p>
+      <div id="collections-list" class="collection-list"></div>
+      <div class="button-group">
+        <button id="refresh-collections-btn" class="button secondary">Refresh Collections</button>
+      </div>
+    </div>
+
+    <div id="selected-collection-state" class="hidden">
+      <div class="results">
+        <h3>Selected Collection</h3>
+        <p id="selected-collection-info"></p>
+      </div>
+      
+      <div id="search-section">
+        <p>Select layers in Figma that contain spacing variables, then click the button below to search for them.</p>
+        <button id="search-btn" class="button">Search for Spacing Variables</button>
+      </div>
+    </div>
+
+    <div id="results" class="hidden">
+      <div class="results">
+        <h3>Search Results</h3>
+        <p id="results-text"></p>
+      </div>
+      
+      <div class="button-group">
+        <button id="update-btn" class="button">Update to Size Variables</button>
+        <button id="search-again-btn" class="button secondary">Search Again</button>
+      </div>
+    </div>
+
+    <div id="message" class="message hidden"></div>
+
+    <div class="button-group">
+      <button id="cancel-btn" class="button secondary">Cancel</button>
+    </div>
+  </div>
+
+  <script>
+    // UI State management
+    let currentState = 'initial';
+    let selectedCollectionKey = null;
+
+    // Elements
+    const initialState = document.getElementById('initial-state');
+    const collectionsState = document.getElementById('collections-state');
+    const selectedCollectionState = document.getElementById('selected-collection-state');
+    const results = document.getElementById('results');
+    const message = document.getElementById('message');
+    const loadCollectionsBtn = document.getElementById('load-collections-btn');
+    const refreshCollectionsBtn = document.getElementById('refresh-collections-btn');
+    const collectionsList = document.getElementById('collections-list');
+    const selectedCollectionInfo = document.getElementById('selected-collection-info');
+    const searchBtn = document.getElementById('search-btn');
+    const updateBtn = document.getElementById('update-btn');
+    const searchAgainBtn = document.getElementById('search-again-btn');
+    const cancelBtn = document.getElementById('cancel-btn');
+    const resultsText = document.getElementById('results-text');
+
+    // Show message helper
+    function showMessage(text, type = 'info') {
+      message.textContent = text;
+      message.className = `message ${type}`;
+      message.classList.remove('hidden');
+      
+      // Auto-hide success messages after 3 seconds
+      if (type === 'success') {
+        setTimeout(() => {
+          message.classList.add('hidden');
+        }, 3000);
+      }
+    }
+
+    // Hide message helper
+    function hideMessage() {
+      message.classList.add('hidden');
+    }
+
+    // Show results helper
+    function showResults(count) {
+      resultsText.textContent = `Found ${count} spacing variable${count !== 1 ? 's' : ''} in the selected layers.`;
+      results.classList.remove('hidden');
+      currentState = 'results';
+    }
+
+    // Hide results helper
+    function hideResults() {
+      results.classList.add('hidden');
+      currentState = 'selected-collection';
+    }
+
+    // Show collections state
+    function showCollectionsState() {
+      initialState.classList.add('hidden');
+      collectionsState.classList.remove('hidden');
+      selectedCollectionState.classList.add('hidden');
+      results.classList.add('hidden');
+      currentState = 'collections';
+    }
+
+    // Show selected collection state
+    function showSelectedCollectionState() {
+      initialState.classList.add('hidden');
+      collectionsState.classList.add('hidden');
+      selectedCollectionState.classList.remove('hidden');
+      results.classList.add('hidden');
+      currentState = 'selected-collection';
+    }
+
+    // Render collections list
+    function renderCollections(collections) {
+      collectionsList.innerHTML = '';
+      
+      collections.forEach(collection => {
+        const item = document.createElement('div');
+        item.className = 'collection-item';
+        item.innerHTML = `
+          <div class="collection-name">${collection.name}</div>
+          <div class="collection-key">${collection.key}</div>
+        `;
+        
+        item.onclick = () => {
+          // Remove previous selection
+          document.querySelectorAll('.collection-item').forEach(el => {
+            el.classList.remove('selected');
+          });
+          
+          // Select this item
+          item.classList.add('selected');
+          selectedCollectionKey = collection.key;
+          
+          // Send selection to plugin
+          parent.postMessage({ 
+            pluginMessage: { type: 'select-collection', collectionKey: collection.key } 
+          }, '*');
+        };
+        
+        collectionsList.appendChild(item);
+      });
+    }
+
+    // Event listeners
+    loadCollectionsBtn.onclick = () => {
+      hideMessage();
+      loadCollectionsBtn.disabled = true;
+      loadCollectionsBtn.textContent = 'Loading...';
+      
+      parent.postMessage({ 
+        pluginMessage: { type: 'get-collections' } 
+      }, '*');
+    };
+
+    refreshCollectionsBtn.onclick = () => {
+      hideMessage();
+      refreshCollectionsBtn.disabled = true;
+      refreshCollectionsBtn.textContent = 'Refreshing...';
+      
+      parent.postMessage({ 
+        pluginMessage: { type: 'get-collections' } 
+      }, '*');
+    };
+
+    searchBtn.onclick = () => {
+      hideMessage();
+      searchBtn.disabled = true;
+      searchBtn.textContent = 'Searching...';
+      
+      parent.postMessage({ 
+        pluginMessage: { type: 'search-spacing' } 
+      }, '*');
+    };
+
+    updateBtn.onclick = () => {
+      hideMessage();
+      updateBtn.disabled = true;
+      updateBtn.textContent = 'Updating...';
+      
+      parent.postMessage({ 
+        pluginMessage: { type: 'update-variables' } 
+      }, '*');
+    };
+
+    searchAgainBtn.onclick = () => {
+      hideResults();
+      hideMessage();
+      searchBtn.disabled = false;
+      searchBtn.textContent = 'Search for Spacing Variables';
+    };
+
+    cancelBtn.onclick = () => {
+      parent.postMessage({ 
+        pluginMessage: { type: 'cancel' } 
+      }, '*');
+    };
+
+    // Handle messages from plugin
+    window.onmessage = (event) => {
+      const msg = event.data.pluginMessage;
+      
+      if (!msg) return;
+
+      switch (msg.type) {
+        case 'collections-list':
+          loadCollectionsBtn.disabled = false;
+          loadCollectionsBtn.textContent = 'Load Library Collections';
+          refreshCollectionsBtn.disabled = false;
+          refreshCollectionsBtn.textContent = 'Refresh Collections';
+          renderCollections(msg.collections);
+          showCollectionsState();
+          break;
+
+        case 'collection-selected':
+          selectedCollectionInfo.textContent = `${msg.collectionName} (${msg.sizeVariablesCount} size variables available)`;
+          showSelectedCollectionState();
+          break;
+
+        case 'search-results':
+          searchBtn.disabled = false;
+          searchBtn.textContent = 'Search for Spacing Variables';
+          showResults(msg.data.count);
+          break;
+
+        case 'update-success':
+          updateBtn.disabled = false;
+          updateBtn.textContent = 'Update to Size Variables';
+          showMessage(msg.message, 'success');
+          hideResults();
+          break;
+
+        case 'update-partial':
+          updateBtn.disabled = false;
+          updateBtn.textContent = 'Update to Size Variables';
+          showMessage(msg.message, 'info');
+          break;
+
+        case 'error':
+          loadCollectionsBtn.disabled = false;
+          loadCollectionsBtn.textContent = 'Load Library Collections';
+          refreshCollectionsBtn.disabled = false;
+          refreshCollectionsBtn.textContent = 'Refresh Collections';
+          searchBtn.disabled = false;
+          searchBtn.textContent = 'Search for Spacing Variables';
+          updateBtn.disabled = false;
+          updateBtn.textContent = 'Update to Size Variables';
+          showMessage(msg.message, 'error');
+          break;
+      }
+    };
+  </script>
+</body>
+</html>
