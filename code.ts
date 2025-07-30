@@ -12,27 +12,17 @@ interface SearchResult {
   count: number;
 }
 
-interface LibraryCollection {
-  key: string;
-  name: string;
-}
-
 // Global variables
 let sizeVariables: any[] = [];
-let libraryCollectionKey: string | null = null;
-let availableCollections: LibraryCollection[] = [];
+const HARDCODED_COLLECTION_KEY = "4f28b1ab0d6c4542d489ef3d1d96420e10c9d7d0";
 
 // Main plugin logic
 if (figma.editorType === 'figma') {
-  figma.showUI(__html__, { width: 400, height: 400 });
+  figma.showUI(__html__, {themeColors: true, width: 400, height: 400 });
 
   // Handle messages from UI
   figma.ui.onmessage = async (msg) => {
-    if (msg.type === 'get-collections') {
-      await getAvailableCollections();
-    } else if (msg.type === 'select-collection') {
-      await selectCollection(msg.collectionKey);
-    } else if (msg.type === 'search-spacing') {
+    if (msg.type === 'search-spacing') {
       await searchForSpacingVariables();
     } else if (msg.type === 'update-variables') {
       await updateSpacingVariables();
@@ -41,46 +31,11 @@ if (figma.editorType === 'figma') {
     }
   };
 
-  // Function to get available library collections
-  async function getAvailableCollections() {
+  // Function to get size variables from the hardcoded collection
+  async function getSizeVariables() {
     try {
-      // Get available library variable collections
-      const libraryCollections = await figma.teamLibrary.getAvailableLibraryVariableCollectionsAsync();
-      
-      if (libraryCollections.length === 0) {
-        figma.ui.postMessage({ 
-          type: 'error', 
-          message: 'No library variable collections found. Please enable a library with size variables.' 
-        });
-        return;
-      }
-
-      // Map collections to our interface
-      availableCollections = libraryCollections.map(collection => ({
-        key: collection.key,
-        name: collection.name
-      }));
-
-      figma.ui.postMessage({ 
-        type: 'collections-list', 
-        collections: availableCollections 
-      });
-
-    } catch (error) {
-      figma.ui.postMessage({ 
-        type: 'error', 
-        message: `Error accessing library collections: ${error}` 
-      });
-    }
-  }
-
-  // Function to select a collection and get its variables
-  async function selectCollection(collectionKey: string) {
-    try {
-      libraryCollectionKey = collectionKey;
-      
-      // Get all variables in the selected collection
-      const allVariables = await figma.teamLibrary.getVariablesInLibraryCollectionAsync(collectionKey);
+      // Get all variables in the hardcoded collection
+      const allVariables = await figma.teamLibrary.getVariablesInLibraryCollectionAsync(HARDCODED_COLLECTION_KEY);
       
       // Filter for size variables (assuming they start with "size/")
       sizeVariables = allVariables.filter(variable => 
@@ -90,26 +45,18 @@ if (figma.editorType === 'figma') {
       if (sizeVariables.length === 0) {
         figma.ui.postMessage({ 
           type: 'error', 
-          message: 'No size variables found in the selected collection. Please ensure size variables exist (e.g., size/2, size/4, etc.)' 
+          message: 'No size variables found in the collection. Please ensure size variables exist (e.g., size/2, size/4, etc.)' 
         });
-        return;
+        return false;
       }
 
-      // Get the collection name for display
-      const selectedCollection = availableCollections.find(c => c.key === collectionKey);
-      const collectionName = selectedCollection ? selectedCollection.name : 'Unknown Collection';
-
-      figma.ui.postMessage({ 
-        type: 'collection-selected', 
-        collectionName: collectionName,
-        sizeVariablesCount: sizeVariables.length
-      });
-
+      return true;
     } catch (error) {
       figma.ui.postMessage({ 
         type: 'error', 
         message: `Error accessing collection variables: ${error}` 
       });
+      return false;
     }
   }
 
@@ -125,12 +72,9 @@ if (figma.editorType === 'figma') {
       return;
     }
 
-    // Check if we have a collection selected
-    if (!libraryCollectionKey || sizeVariables.length === 0) {
-      figma.ui.postMessage({ 
-        type: 'error', 
-        message: 'Please select a library collection first.' 
-      });
+    // First, ensure we have access to size variables
+    const hasVariables = await getSizeVariables();
+    if (!hasVariables) {
       return;
     }
 
