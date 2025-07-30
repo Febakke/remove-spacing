@@ -10,6 +10,7 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, ge
 };
 // Global variables
 let sizeVariables = [];
+let sizeVariablesMap = new Map();
 const HARDCODED_COLLECTION_KEY = "4f28b1ab0d6c4542d489ef3d1d96420e10c9d7d0";
 // Main plugin logic
 if (figma.editorType === 'figma') {
@@ -34,6 +35,12 @@ if (figma.editorType === 'figma') {
                 const allVariables = yield figma.teamLibrary.getVariablesInLibraryCollectionAsync(HARDCODED_COLLECTION_KEY);
                 // Filter for size variables (assuming they start with "size/")
                 sizeVariables = allVariables.filter(variable => variable.name.startsWith('size/') && variable.resolvedType === 'FLOAT');
+                // Create a Map for O(1) lookups
+                sizeVariablesMap.clear();
+                sizeVariables.forEach(variable => {
+                    const suffix = variable.name.replace('size/', '');
+                    sizeVariablesMap.set(suffix, variable);
+                });
                 if (sizeVariables.length === 0) {
                     figma.ui.postMessage({
                         type: 'error',
@@ -52,51 +59,20 @@ if (figma.editorType === 'figma') {
             }
         });
     }
-    // Function to search for spacing variables in selection
-    function searchForSpacingVariables() {
+    // Shared function to search for spacing variables in a node
+    function searchNodeForSpacingVariables(node, spacingVariables) {
         return __awaiter(this, void 0, void 0, function* () {
-            const selection = figma.currentPage.selection;
-            if (selection.length === 0) {
-                figma.ui.postMessage({
-                    type: 'error',
-                    message: 'Please select at least one layer to search for spacing variables.'
-                });
-                return;
-            }
-            // First, ensure we have access to size variables
-            const hasVariables = yield getSizeVariables();
-            if (!hasVariables) {
-                return;
-            }
-            const spacingVariables = [];
-            // Recursively search through all selected nodes
-            function searchNode(node) {
-                return __awaiter(this, void 0, void 0, function* () {
-                    // Check if node has bound variables
-                    if ('boundVariables' in node && node.boundVariables) {
-                        const boundVars = node.boundVariables;
-                        // Check each property that might have spacing variables
-                        for (const property of Object.keys(boundVars)) {
-                            const boundVar = boundVars[property];
-                            if (Array.isArray(boundVar)) {
-                                for (const variableRef of boundVar) {
-                                    if (variableRef.type === 'VARIABLE_ALIAS') {
-                                        // Get the actual variable using async method
-                                        const variable = yield figma.variables.getVariableByIdAsync(variableRef.id);
-                                        if (variable && variable.name.startsWith('spacing/')) {
-                                            spacingVariables.push({
-                                                nodeId: node.id,
-                                                variableId: variable.id,
-                                                variableName: variable.name,
-                                                property: property,
-                                                value: variableRef
-                                            });
-                                        }
-                                    }
-                                }
-                            }
-                            else if (boundVar && boundVar.type === 'VARIABLE_ALIAS') {
-                                const variable = yield figma.variables.getVariableByIdAsync(boundVar.id);
+            // Check if node has bound variables
+            if ('boundVariables' in node && node.boundVariables) {
+                const boundVars = node.boundVariables;
+                // Check each property that might have spacing variables
+                for (const property of Object.keys(boundVars)) {
+                    const boundVar = boundVars[property];
+                    if (Array.isArray(boundVar)) {
+                        for (const variableRef of boundVar) {
+                            if (variableRef.type === 'VARIABLE_ALIAS') {
+                                // Get the actual variable using async method
+                                const variable = yield figma.variables.getVariableByIdAsync(variableRef.id);
                                 if (variable && variable.name.startsWith('spacing/')) {
                                     spacingVariables.push({
                                         nodeId: node.id,
@@ -109,25 +85,69 @@ if (figma.editorType === 'figma') {
                             }
                         }
                     }
-                    // Recursively search children
-                    if ('children' in node) {
-                        for (const child of node.children) {
-                            yield searchNode(child);
+                    else if (boundVar && boundVar.type === 'VARIABLE_ALIAS') {
+                        const variable = yield figma.variables.getVariableByIdAsync(boundVar.id);
+                        if (variable && variable.name.startsWith('spacing/')) {
+                            spacingVariables.push({
+                                nodeId: node.id,
+                                variableId: variable.id,
+                                variableName: variable.name,
+                                property: property,
+                                value: boundVar
+                            });
                         }
                     }
-                });
+                }
             }
+            // Recursively search children
+            if ('children' in node) {
+                for (const child of node.children) {
+                    yield searchNodeForSpacingVariables(child, spacingVariables);
+                }
+            }
+        });
+    }
+    // Shared function to search through selection
+    function searchSelectionForSpacingVariables() {
+        return __awaiter(this, void 0, void 0, function* () {
+            const selection = figma.currentPage.selection;
+            if (selection.length === 0) {
+                figma.ui.postMessage({
+                    type: 'error',
+                    message: 'Please select at least one layer to search for spacing variables.'
+                });
+                return [];
+            }
+            const spacingVariables = [];
             // Search through all selected nodes
             for (const node of selection) {
-                yield searchNode(node);
+                yield searchNodeForSpacingVariables(node, spacingVariables);
             }
-            const result = {
-                spacingVariables,
-                count: spacingVariables.length
-            };
+            return spacingVariables;
+        });
+    }
+    // Function to search for spacing variables in selection
+    function searchForSpacingVariables() {
+        return __awaiter(this, void 0, void 0, function* () {
+            // First, ensure we have access to size variables
+            const hasVariables = yield getSizeVariables();
+            if (!hasVariables) {
+                return;
+            }
+            const spacingVariables = yield searchSelectionForSpacingVariables();
+            if (spacingVariables.length === 0) {
+                figma.ui.postMessage({
+                    type: 'error',
+                    message: 'No spacing variables found in the selected layers.'
+                });
+                return;
+            }
             figma.ui.postMessage({
                 type: 'search-results',
-                data: result
+                data: {
+                    spacingVariables,
+                    count: spacingVariables.length
+                }
             });
         });
     }
@@ -135,70 +155,28 @@ if (figma.editorType === 'figma') {
     function updateSpacingVariables() {
         return __awaiter(this, void 0, void 0, function* () {
             try {
-                const selection = figma.currentPage.selection;
-                if (selection.length === 0) {
-                    figma.ui.postMessage({
-                        type: 'error',
-                        message: 'Please select at least one layer to update.'
-                    });
+                // First, ensure we have access to size variables
+                const hasVariables = yield getSizeVariables();
+                if (!hasVariables) {
                     return;
                 }
-                // Re-search for spacing variables
-                const spacingVariables = [];
-                function searchNode(node) {
-                    return __awaiter(this, void 0, void 0, function* () {
-                        if ('boundVariables' in node && node.boundVariables) {
-                            const boundVars = node.boundVariables;
-                            for (const property of Object.keys(boundVars)) {
-                                const boundVar = boundVars[property];
-                                if (Array.isArray(boundVar)) {
-                                    for (const variableRef of boundVar) {
-                                        if (variableRef.type === 'VARIABLE_ALIAS') {
-                                            const variable = yield figma.variables.getVariableByIdAsync(variableRef.id);
-                                            if (variable && variable.name.startsWith('spacing/')) {
-                                                spacingVariables.push({
-                                                    nodeId: node.id,
-                                                    variableId: variable.id,
-                                                    variableName: variable.name,
-                                                    property: property,
-                                                    value: variableRef
-                                                });
-                                            }
-                                        }
-                                    }
-                                }
-                                else if (boundVar && boundVar.type === 'VARIABLE_ALIAS') {
-                                    const variable = yield figma.variables.getVariableByIdAsync(boundVar.id);
-                                    if (variable && variable.name.startsWith('spacing/')) {
-                                        spacingVariables.push({
-                                            nodeId: node.id,
-                                            variableId: variable.id,
-                                            variableName: variable.name,
-                                            property: property,
-                                            value: boundVar
-                                        });
-                                    }
-                                }
-                            }
-                        }
-                        if ('children' in node) {
-                            for (const child of node.children) {
-                                yield searchNode(child);
-                            }
-                        }
+                // Search for spacing variables
+                const spacingVariables = yield searchSelectionForSpacingVariables();
+                if (spacingVariables.length === 0) {
+                    figma.ui.postMessage({
+                        type: 'error',
+                        message: 'No spacing variables found in the selected layers.'
                     });
-                }
-                for (const node of selection) {
-                    yield searchNode(node);
+                    return;
                 }
                 let updatedCount = 0;
                 let errorCount = 0;
                 // Update each spacing variable
                 for (const spacingVar of spacingVariables) {
                     try {
-                        // Find corresponding size variable (e.g., spacing/2 -> size/2)
+                        // Find corresponding size variable using O(1) Map lookup
                         const sizeSuffix = spacingVar.variableName.replace('spacing/', '');
-                        const correspondingSizeVar = sizeVariables.find(sizeVar => sizeVar.name === `size/${sizeSuffix}`);
+                        const correspondingSizeVar = sizeVariablesMap.get(sizeSuffix);
                         if (correspondingSizeVar) {
                             // Import the size variable
                             const importedSizeVar = yield figma.variables.importVariableByKeyAsync(correspondingSizeVar.key);

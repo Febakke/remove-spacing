@@ -17,7 +17,7 @@
     }
 
     h2 {
-      margin: 0 0 0px 0;
+      margin: 0;
       font-size: 16px;
       font-weight: 600;
       color: var(--figma-color-text);
@@ -54,15 +54,6 @@
       background: var(--figma-color-bg-secondary-hover);
     }
 
-    .button.danger {
-      background: var(--figma-color-bg-danger);
-      color: var(--figma-color-text-ondanger);
-    }
-
-    .button.danger:hover {
-      background: var(--figma-color-bg-danger-hover);
-    }
-
     .message {
       padding: 12px;
       border-radius: 6px;
@@ -71,7 +62,6 @@
     }
 
     .message.success {
-      padding: 12px;
       background: var(--figma-color-bg-success);
       color: var(--figma-color-text-onsuccess);
       border: 1px solid var(--figma-color-border-success);
@@ -147,11 +137,7 @@
   </div>
 
   <script>
-    // UI State management
-    let currentState = 'initial';
-
     // Elements
-    const initialState = document.getElementById('initial-state');
     const results = document.getElementById('results');
     const message = document.getElementById('message');
     const searchBtn = document.getElementById('search-btn');
@@ -159,6 +145,12 @@
     const searchAgainBtn = document.getElementById('search-again-btn');
     const cancelBtn = document.getElementById('cancel-btn');
     const resultsText = document.getElementById('results-text');
+
+    // Helper function to set button loading state
+    function setButtonLoading(button, isLoading, loadingText, originalText) {
+      button.disabled = isLoading;
+      button.textContent = isLoading ? loadingText : originalText;
+    }
 
     // Show message helper
     function showMessage(text, type = 'info') {
@@ -183,20 +175,17 @@
     function showResults(count) {
       resultsText.textContent = `Found ${count} spacing variable${count !== 1 ? 's' : ''} in the selected layers.`;
       results.classList.remove('hidden');
-      currentState = 'results';
     }
 
     // Hide results helper
     function hideResults() {
       results.classList.add('hidden');
-      currentState = 'initial';
     }
 
     // Event listeners
     searchBtn.onclick = () => {
       hideMessage();
-      searchBtn.disabled = true;
-      searchBtn.textContent = 'Searching...';
+      setButtonLoading(searchBtn, true, 'Searching...', 'Search for Spacing Variables');
       
       parent.postMessage({ 
         pluginMessage: { type: 'search-spacing' } 
@@ -205,8 +194,7 @@
 
     updateBtn.onclick = () => {
       hideMessage();
-      updateBtn.disabled = true;
-      updateBtn.textContent = 'Updating...';
+      setButtonLoading(updateBtn, true, 'Updating...', 'Update to Size Variables');
       
       parent.postMessage({ 
         pluginMessage: { type: 'update-variables' } 
@@ -216,8 +204,7 @@
     searchAgainBtn.onclick = () => {
       hideResults();
       hideMessage();
-      searchBtn.disabled = true;
-      searchBtn.textContent = 'Searching...';
+      setButtonLoading(searchBtn, true, 'Searching...', 'Search for Spacing Variables');
       
       parent.postMessage({ 
         pluginMessage: { type: 'search-spacing' } 
@@ -238,29 +225,24 @@
 
       switch (msg.type) {
         case 'search-results':
-          searchBtn.disabled = false;
-          searchBtn.textContent = 'Search for Spacing Variables';
+          setButtonLoading(searchBtn, false, 'Searching...', 'Search for Spacing Variables');
           showResults(msg.data.count);
           break;
 
         case 'update-success':
-          updateBtn.disabled = false;
-          updateBtn.textContent = 'Update to Size Variables';
+          setButtonLoading(updateBtn, false, 'Updating...', 'Update to Size Variables');
           showMessage(msg.message, 'success');
           hideResults();
           break;
 
         case 'update-partial':
-          updateBtn.disabled = false;
-          updateBtn.textContent = 'Update to Size Variables';
+          setButtonLoading(updateBtn, false, 'Updating...', 'Update to Size Variables');
           showMessage(msg.message, 'info');
           break;
 
         case 'error':
-          searchBtn.disabled = false;
-          searchBtn.textContent = 'Search for Spacing Variables';
-          updateBtn.disabled = false;
-          updateBtn.textContent = 'Update to Size Variables';
+          setButtonLoading(searchBtn, false, 'Searching...', 'Search for Spacing Variables');
+          setButtonLoading(updateBtn, false, 'Updating...', 'Update to Size Variables');
           showMessage(msg.message, 'error');
           break;
       }
